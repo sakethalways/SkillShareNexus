@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// Enum for roles: Student, Tutor, Admin
+enum Role {
+  STUDENT
+  TUTOR
+  ADMIN
+}
+
+// User Model
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  role      Role
+  profile   Profile?
+  tutor     Tutor?
+  student   Student?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sentMessages     Message[] @relation(name: "SentMessages")
+  receivedMessages Message[] @relation(name: "ReceivedMessages")
+}
+
+// Profile Model (Additional user profile info)
+model Profile {
+  id       Int     @id @default(autoincrement())
+  bio      String
+  location String
+  userId   Int     @unique
+  user     User    @relation(fields: [userId], references: [id])
+}
+
+// Tutor Model
+model Tutor {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id])
+  courses      Course[]      // Courses taught by the tutor
+  liveSessions LiveSession[] // Live sessions scheduled by the tutor
+}
+
+// Student Model
+model Student {
+  id                  Int             @id @default(autoincrement())
+  userId              Int             @unique
+  user                User            @relation(fields: [userId], references: [id])
+  enrollments         Enrollment[]    // Enrolled courses
+  chats               Chat[]          @relation(name: "SenderChat") // Messages sent by this student
+  messagesReceived    Chat[]          @relation(name: "ReceiverChat") // Messages received by this student
+  payments            Payment[]       // Payment history
+  liveSessionsAttended LiveSession[]  @relation("LiveSessionAttendees") // Sessions attended by the student
+  goal                String?         // Student's learning goal (optional)
+  notificationsEnabled Boolean        @default(true) // Notification preference
+  badges             Badge[]          @relation("StudentBadges") // Badges earned by the student
+  performance         Float?          // Computed performance (average progress, etc.)
+}
+
+// Course Model
+model Course {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  price       Float
+  tutorId     Int
+  tutor       Tutor    @relation(fields: [tutorId], references: [id])
+  resources   Resource[]    // Course materials like videos, PDFs
+  enrollments Enrollment[]  // List of enrollments for the course
+}
+
+// Enrollment Model (Links students to courses)
+model Enrollment {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  courseId  Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+  progress  Float    @default(0) // Student's progress in the course
+}
+
+// Payment Model (Tracks payments made by students)
+model Payment {
+  id        Int           @id @default(autoincrement())
+  studentId Int
+  amount    Float
+  date      DateTime      @default(now())
+  status    PaymentStatus
+
+  student   Student       @relation(fields: [studentId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// Message Model (Tracks individual messages)
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  receiverId Int
+  content    String
+  sentAt     DateTime @default(now())
+
+  sender     User     @relation(name: "SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation(name: "ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+// Chat Model (Tracks group/private messages between students)
+model Chat {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  receiverId Int
+  content    String
+  sentAt     DateTime @default(now())
+
+  sender     Student  @relation(name: "SenderChat", fields: [senderId], references: [id])
+  receiver   Student  @relation(name: "ReceiverChat", fields: [receiverId], references: [id])
+}
+
+// LiveSession Model (For scheduling and tracking live classes)
+model LiveSession {
+  id        Int      @id @default(autoincrement())
+  tutorId   Int
+  title     String
+  startTime DateTime
+  endTime   DateTime
+  tutor     Tutor    @relation(fields: [tutorId], references: [id])
+
+  students  Student[] @relation("LiveSessionAttendees") // Students attending the session
+}
+
+// Resource Model (For course materials like PDFs, videos)
+model Resource {
+  id        Int          @id @default(autoincrement())
+  courseId  Int
+  url       String
+  type      ResourceType
+  course    Course       @relation(fields: [courseId], references: [id])
+}
+
+enum ResourceType {
+  PDF
+  VIDEO
+}
+
+// Badge Model (For achievements and rewards earned by students)
+model Badge {
+  id          Int      @id @default(autoincrement())
+  title       String   // e.g., "Completed First Course"
+  description String   // Description of the badge
+  students    Student[] @relation("StudentBadges") // Students who earned the badge
+}
